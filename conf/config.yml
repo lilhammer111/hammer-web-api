@@ -1,0 +1,2 @@
+redis:
+  expire: 300
