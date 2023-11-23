@@ -35,4 +35,5 @@ func Load(router *gin.Engine) {
 
 	ApiGroup := router.Group("/api/v1")
 	InitUserRouter(ApiGroup)
+	InitTextbookRouter(ApiGroup)
 }

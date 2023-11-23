@@ -3,39 +3,37 @@ package routes
 import (
 	"github.com/gin-gonic/gin"
 	"hammer-web-api/controllers"
-	"hammer-web-api/di"
 	m "hammer-web-api/middleware"
 )
 
 func InitUserRouter(rg *gin.RouterGroup) {
-	userRouter := rg.Group("user")
-	di.Zap().Info("set user router group")
+	userRouter := rg.Group("users")
 	{
 		// standard api
 		userRouter.POST("", func(c *gin.Context) {
-			userCtl := controllers.UserController{}
-			userCtl.Post(c)
+			user := controllers.UserController{}
+			user.Post(c)
 		})
 
 		userRouter.GET("/:id", m.AuthMiddleware(), func(c *gin.Context) {
-			userCtl := controllers.UserController{}
-			userCtl.Get(c)
+			user := controllers.UserController{}
+			user.Get(c)
 		})
 
 		userRouter.PUT("/:id", m.AuthMiddleware(), func(c *gin.Context) {
-			userCtl := controllers.UserController{}
-			userCtl.Put(c)
+			user := controllers.UserController{}
+			user.Put(c)
 		})
 
 		userRouter.DELETE("/:id", m.AuthMiddleware(), func(c *gin.Context) {
-			userCtl := controllers.UserController{}
-			userCtl.Delete(c)
+			user := controllers.UserController{}
+			user.Delete(c)
 		})
 
 		// non-standard api
 		userRouter.POST("/login", func(c *gin.Context) {
-			userCtl := controllers.UserController{}
-			userCtl.Login(c)
+			user := controllers.UserController{}
+			user.Login(c)
 		})
 		userRouter.GET("/captcha", controllers.GenerateCaptcha)
 		userRouter.GET("/sms", controllers.SendSms)

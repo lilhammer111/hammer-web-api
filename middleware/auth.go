@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/mix-go/xutil/xenv"
+	"hammer-web-api/di"
 	"net/http"
 	"strings"
 )
@@ -14,6 +15,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		// 获取 token
 		tokenString := c.GetHeader("Authorization")
 		if strings.Index(tokenString, "Bearer ") != 0 {
+			di.Zap().Error("failed to get token while parsing tokenString")
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status":  http.StatusInternalServerError,
 				"message": "failed to extract token",
@@ -26,13 +28,14 @@ func AuthMiddleware() gin.HandlerFunc {
 		token, err := jwt.Parse(tokenString[7:], func(token *jwt.Token) (interface{}, error) {
 			// Don't forget to validate the alg is what you expect:
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
 
 			// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
 			return []byte(xenv.Getenv("HMAC_SECRET").String()), nil
 		})
 		if err != nil {
+			di.Zap().Error("failed to parse token")
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"status":  http.StatusInternalServerError,
 				"message": err.Error(),

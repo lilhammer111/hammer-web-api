@@ -294,7 +294,7 @@ fmt.Println(result)
 
 ```go
 rdb := di.GoRedis()
-val, err := rdb.Get(context.Background(), "key").Result()
+val, err := rdb.GetSubscription(context.Background(), "key").Result()
 if err != nil {
     panic(err)
 }

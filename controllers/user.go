@@ -12,6 +12,7 @@ import (
 	bc "github.com/mojocn/base64Captcha"
 	"hammer-web-api/config"
 	"hammer-web-api/di"
+	"hammer-web-api/models"
 	"math/rand"
 	"net/http"
 	"strings"
@@ -21,30 +22,18 @@ import (
 )
 
 type UserController struct {
-	BaseModel
-	Username string     `gorm:"type:varchar(255);unique;not null" json:"username" binding:"required"`
-	Password string     `gorm:"type:varchar(255);not null" json:"password" binding:"required"`
-	Phone    string     `gorm:"type:varchar(11);unique;not null;index" json:"phone" binding:"required"`
-	Email    string     `gorm:"type:varchar(255);unique;null" json:"email" binding:"omitempty,email"`
-	BirthDay *time.Time `gorm:"type:date;null" json:"birth-day" binding:"omitempty"`
-	Profile  string     `gorm:"type:text;null" json:"profile" binding:"omitempty"`
-	Avatar   string     `gorm:"type:varchar(255);null" json:"avatar" binding:"omitempty,url"`
-}
-
-func (t *UserController) TableName() string {
-	return "user_controllers"
 }
 
 type registerForm struct {
 	loginForm
 	Username string `json:"username" binding:"required"`
-	SmsCode  string `json:"sms-code" binding:"required"`
+	SmsCode  string `json:"smsCode" binding:"required"`
 }
 
 type loginForm struct {
 	Phone     string `json:"phone" binding:"required"`
 	Password  string `json:"password" binding:"required"`
-	CaptchaID string `json:"captcha-id" binding:"required"`
+	CaptchaID string `json:"captchaID" binding:"required"`
 	Captcha   string `json:"captcha" binding:"required"`
 }
 
@@ -59,17 +48,15 @@ func GenerateCaptcha(c *gin.Context) {
 	if err != nil {
 		di.Zap().Errorf("failed to generate captcha: %s", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  http.StatusInternalServerError,
 			"message": "failed to generate captcha",
 		})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"status":  http.StatusOK,
 		"message": "ok",
 		"data": gin.H{
-			"captcha-id":   id,
-			"picture-path": b64s,
+			"captchaID":   id,
+			"picturePath": b64s,
 		},
 	})
 }
@@ -102,7 +89,6 @@ func SendSms(c *gin.Context) {
 	if err != nil {
 		di.Zap().Errorf("failed to send sms: %s", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  http.StatusInternalServerError,
 			"message": err.Error(),
 		})
 		return
@@ -111,7 +97,6 @@ func SendSms(c *gin.Context) {
 	if *response.StatusCode != http.StatusOK {
 		di.Zap().Errorf("failed to send sms: %s", *response.Body.Message)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  http.StatusInternalServerError,
 			"message": err.Error(),
 		})
 		return
@@ -121,14 +106,12 @@ func SendSms(c *gin.Context) {
 	if err != nil {
 		di.Zap().Errorf("failed to save the value of %s: %s", smsCode, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  http.StatusInternalServerError,
 			"message": err.Error(),
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":  http.StatusOK,
 		"message": "ok",
 	})
 }
@@ -140,8 +123,7 @@ func (t *UserController) Login(c *gin.Context) {
 	if err != nil {
 		di.Zap().Errorf("failed to bind form: %s", err)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  http.StatusBadRequest,
-			"message": "bad request",
+			"message": "please check your entry",
 		})
 		return
 	}
@@ -150,46 +132,51 @@ func (t *UserController) Login(c *gin.Context) {
 	if ok := store.Verify(lf.CaptchaID, lf.Captcha, false); !ok {
 		di.Zap().Errorf("wrong captcha: %s", err)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  http.StatusBadRequest,
 			"message": "wrong captcha",
 		})
 		return
 	}
 
 	// verify password
-	if di.Gorm().Where("phone = ?", lf.Phone).First(t).RowsAffected == 0 {
+	user := models.User{}
+	if di.Gorm().Where("phone = ?", lf.Phone).First(&user).RowsAffected == 0 {
 		c.JSON(http.StatusNotFound, gin.H{
-			"status":  http.StatusNotFound,
 			"message": "not yet registered",
 		})
 		return
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(t.Password), []byte(lf.Password))
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(lf.Password))
 	if err != nil {
 		di.Zap().Errorf("wrong password: %s", err)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  http.StatusBadRequest,
-			"message": "bad request",
+			"message": "please check your entry",
 		})
 		return
 	}
 
 	// generate token and response
-	token, err := generateToken(t)
+	token, err := generateToken(&user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  http.StatusInternalServerError,
 			"message": "failed to create token",
 		})
 	}
 
+	respData := map[string]any{
+		"id":       user.ID,
+		"username": user.Username,
+		"email":    user.Email,
+		"phone":    user.Phone,
+		"profile":  user.Profile,
+		"birthDay": user.BirthDay,
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"status":       http.StatusOK,
-		"message":      "ok",
-		"access_token": token,
-		"expire_in":    7200,
-		"data":         t,
+		"message":     "ok",
+		"accessToken": token,
+		"expireIn":    7200,
+		"data":        respData,
 	})
 }
 
@@ -202,7 +189,6 @@ func (t *UserController) Post(c *gin.Context) {
 	if err != nil {
 		di.Zap().Errorf("failed to bind form: %s", err)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  http.StatusBadRequest,
 			"message": "bad request",
 		})
 		return
@@ -212,7 +198,6 @@ func (t *UserController) Post(c *gin.Context) {
 	if ok := store.Verify(rf.CaptchaID, rf.Captcha, false); !ok {
 		di.Zap().Errorf("wrong captcha or captcha id: %s", rf.Captcha)
 		c.JSON(http.StatusBadRequest, gin.H{
-			"status":  http.StatusBadRequest,
 			"message": "wrong captcha",
 		})
 		return
@@ -223,7 +208,6 @@ func (t *UserController) Post(c *gin.Context) {
 	if err != nil {
 		di.Zap().Errorf("failed to get value of %s: %s", rf.Phone, err)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  http.StatusInternalServerError,
 			"message": err.Error(),
 		})
 		return
@@ -231,7 +215,6 @@ func (t *UserController) Post(c *gin.Context) {
 
 	if rf.SmsCode != rightSmsCode {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  http.StatusInternalServerError,
 			"message": "wrong sms code",
 		})
 		return
@@ -240,39 +223,37 @@ func (t *UserController) Post(c *gin.Context) {
 	hashPWD, err := bcrypt.GenerateFromPassword([]byte(rf.Password), bcrypt.DefaultCost)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  http.StatusInternalServerError,
 			"message": err.Error(),
 		})
 		return
 	}
-	t.Password = string(hashPWD)
 
-	t.Phone = rf.Phone
-	t.Username = rf.Username
-	if res := di.Gorm().Save(t); res.RowsAffected == 0 {
+	user := models.User{}
+	user.Password = string(hashPWD)
+
+	user.Phone = rf.Phone
+	user.Username = rf.Username
+	if res := di.Gorm().Save(&user); res.RowsAffected == 0 {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  http.StatusInternalServerError,
 			"message": res.Error.Error(),
 		})
 		return
 	}
 
 	// generate token and response
-	token, err := generateToken(t)
+	token, err := generateToken(&user)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"status":  http.StatusInternalServerError,
 			"message": "Creation of token fails",
 		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"status":       http.StatusOK,
 		"message":      "ok",
 		"access_token": token,
 		"expire_in":    7200,
-		"data":         t,
+		"data":         user,
 	})
 }
 
@@ -316,14 +297,14 @@ func generateSmsCode(width int) string {
 	return sb.String()
 }
 
-func generateToken(t *UserController) (string, error) {
+func generateToken(user *models.User) (string, error) {
 	now := time.Now().Unix()
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"iss": "http://hammer.wang",                                  // 签发人
 		"iat": now,                                                   // 签发时间
 		"exp": now + int64(7200),                                     // 过期时间
 		"nbf": time.Date(2015, 10, 10, 12, 0, 0, 0, time.UTC).Unix(), // 什么时间之前不可用
-		"uid": t.ID,
+		"uid": user.ID,
 	})
 
 	return token.SignedString([]byte(xenv.Getenv("HMAC_SECRET").String()))
